@@ -11,6 +11,7 @@
   IG_ACCESS_TOKEN  長期アクセストークン（GitHubではSecretsに入れる。ローカルでは .env）
 任意:
   PUBLIC_BASE_URL  動画を置いた公開URLの先頭（未指定なら GitHub Pages のURLを自動で組み立てる）
+  IG_USER_ID       InstagramアカウントのID（EAA…型のトークンのとき使う。既定は @16type_kanzen_manual）
   IG_API_VERSION   既定 v27.0
   LEAD_MINUTES     予約時刻の何分前から準備を始めるか（既定 25）
   LATE_HOURS       予約時刻を何時間過ぎても投稿するか（既定 3。過ぎたらスキップして記録）
@@ -39,7 +40,18 @@ QUEUE = ROOT / "queue" / "queue.csv"
 CAPTIONS = ROOT / "queue" / "captions"
 STATE = ROOT / "state" / "posted.json"
 API_VERSION = os.environ.get("IG_API_VERSION", "v27.0")
-BASE = f"https://graph.instagram.com/{API_VERSION}"
+DEFAULT_IG_USER_ID = "17841480920268169"  # @16type_kanzen_manual（秘密ではない公開ID）
+
+
+def _token():
+    # コピー時に混ざりやすい前後の空白・改行・引用符を取り除く
+    return os.environ.get("IG_ACCESS_TOKEN", "").strip().strip('"').strip("'")
+
+
+# EAA… で始まるトークン（Facebookログイン／統合ログイン型）は graph.facebook.com、
+# IGAA… で始まるトークン（Instagramログイン型）は graph.instagram.com に送る
+IS_FB_TOKEN = _token().startswith("EAA")
+BASE = f"https://{'graph.facebook.com' if IS_FB_TOKEN else 'graph.instagram.com'}/{API_VERSION}"
 
 
 def load_dotenv():
@@ -62,7 +74,7 @@ class ApiError(Exception):
 
 
 def call(method, path, params=None):
-    token = os.environ["IG_ACCESS_TOKEN"]
+    token = _token()
     params = dict(params or {})
     params["access_token"] = token
     url = f"{BASE}/{path}"
@@ -112,6 +124,10 @@ def write_state(state):
 
 
 def me():
+    if IS_FB_TOKEN:
+        uid = os.environ.get("IG_USER_ID", "").strip() or DEFAULT_IG_USER_ID
+        r = call("GET", uid, {"fields": "id,username"})
+        return {"user_id": r["id"], "username": r.get("username")}
     return call("GET", "me", {"fields": "user_id,username"})
 
 
@@ -174,7 +190,7 @@ def main():
     ap.add_argument("--now", action="store_true")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args()
-    if not os.environ.get("IG_ACCESS_TOKEN"):
+    if not _token():
         sys.exit("IG_ACCESS_TOKEN が見つかりません")
 
     who = me()
