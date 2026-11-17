@@ -131,6 +131,30 @@ def me():
     return call("GET", "me", {"fields": "user_id,username"})
 
 
+def report_token_expiry():
+    """トークンの有効期限をログに出す（EAA型のみ。トークン自体は出さない）。"""
+    if not IS_FB_TOKEN:
+        log("トークンの有効期限: （IGAA型のため確認対象外。発行から約60日）")
+        return
+    try:
+        d = call("GET", "debug_token", {"input_token": _token()}).get("data", {})
+    except ApiError as e:
+        log(f"トークンの有効期限: 確認できませんでした（{str(e)[:120]}）")
+        return
+    exp = d.get("expires_at", 0)
+    data_exp = d.get("data_access_expires_at", 0)
+    if exp == 0:
+        log("トークンの有効期限: 無期限（expires_at=0）")
+    else:
+        dt = datetime.fromtimestamp(exp, JST)
+        days = (dt - datetime.now(JST)).days
+        log(f"トークンの有効期限: {dt:%Y-%m-%d} （あと{days}日）")
+    if data_exp:
+        dt2 = datetime.fromtimestamp(data_exp, JST)
+        log(f"データアクセスの期限: {dt2:%Y-%m-%d}")
+    log(f"トークンの有効性: is_valid={d.get('is_valid')} type={d.get('type')}")
+
+
 def create_container(user_id, row):
     base = public_base()
     caption = (CAPTIONS / row["caption"]).read_text(encoding="utf-8").strip()
@@ -199,6 +223,7 @@ def main():
     if a.check:
         lim = call("GET", f"{user_id}/content_publishing_limit", {"fields": "quota_usage,config"})
         log(f"投稿の上限: {lim}")
+        report_token_expiry()
         return
 
     rows = read_queue()
