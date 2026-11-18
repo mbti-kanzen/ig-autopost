@@ -1,1 +1,8 @@
-{}
+{
+  "20261118-2015-list-B17": {
+    "status": "retry",
+    "tries": 1,
+    "error": "動画の処理に失敗: {'id': '17850105054697343', 'status': 'Error: Media upload has failed with error code 2207077', 'status_code': 'ERROR'}",
+    "at": "2026-11-18T20:39:56.878362+09:00"
+  }
+}
